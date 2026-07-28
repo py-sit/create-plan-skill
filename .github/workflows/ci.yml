@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "codex/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9"
+          - "3.11"
+          - "3.13"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            scripts/requirements.txt
+            scripts/requirements-v2.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fonts-noto-cjk \
+            poppler-utils
+
+      - name: Install Python dependencies
+        run: python -m pip install -r scripts/requirements-v2.txt
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run unit and integration tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Validate V1.1 eval compatibility
+        run: python scripts/validate_evals.py evals/cases.jsonl
+
+      - name: Validate and score V2 evals
+        run: |
+          python scripts/validate_evals.py evals/v2/cases.jsonl --profile v2
+          python scripts/evaluate_router.py evals/v2/cases.jsonl
+
+      - name: Validate plugin and skills
+        run: |
+          python scripts/validate_plugin_layout.py .
+          for skill in skills/*; do
+            python scripts/validate_skill_layout.py "$skill"
+          done
+
+      - name: Scan release runtime for sensitive content
+        run: python scripts/scan_sensitive_content.py . --profile release

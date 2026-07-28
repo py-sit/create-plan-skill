@@ -12,22 +12,10 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_VALIDATOR = (
-    Path.home()
-    / ".codex"
-    / "skills"
-    / ".system"
-    / "skill-creator"
-    / "scripts"
-    / "quick_validate.py"
+    ROOT / "scripts" / "validate_skill_layout.py"
 )
 PLUGIN_VALIDATOR = (
-    Path.home()
-    / ".codex"
-    / "skills"
-    / ".system"
-    / "plugin-creator"
-    / "scripts"
-    / "validate_plugin.py"
+    ROOT / "scripts" / "validate_plugin_layout.py"
 )
 
 PLUGIN_SKILLS = {

@@ -1,0 +1,24 @@
+zh-CN:
+  name: "zh-CN-corporate-blue-v2"
+  min_pages: 3
+  page_aspect_ratio:
+    min: 0.69
+    max: 0.72
+  cover_dark_ratio:
+    min: 0.08
+    max: 0.55
+  page_ink_ratio:
+    min: 0.008
+    max: 0.70
+en-US:
+  name: "en-US-corporate-blue-v2"
+  min_pages: 3
+  page_aspect_ratio:
+    min: 0.69
+    max: 0.72
+  cover_dark_ratio:
+    min: 0.08
+    max: 0.55
+  page_ink_ratio:
+    min: 0.008
+    max: 0.70
