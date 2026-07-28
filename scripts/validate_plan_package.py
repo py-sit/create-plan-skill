@@ -7,14 +7,19 @@ import json
 from pathlib import Path
 import re
 import sys
-from typing import Dict, Iterable, List, Sequence
-from urllib.parse import unquote
+from typing import Any, Dict, Iterable, List, Sequence
+from urllib.parse import unquote, urlparse
 
 try:
     from pypdf import PdfReader
 except ImportError as error:
     print("ERROR: Missing pypdf. Install scripts/requirements.txt.", file=sys.stderr)
     raise SystemExit(2) from error
+
+try:
+    import yaml
+except ImportError:
+    yaml = None  # type: ignore[assignment]
 
 
 MODES = (
@@ -143,6 +148,239 @@ def validate_evidence_register(path: Path, results: List[Dict[str, str]]) -> set
         f"ids={sorted(evidence_ids)}",
     )
     return evidence_ids
+
+
+def read_evidence_ids(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return set(re.findall(r"(?m)^\|\s*(E-\d+)\s*\|", text))
+
+
+def read_yaml_mapping(
+    path: Path,
+    label: str,
+    results: List[Dict[str, str]],
+) -> Dict[str, Any] | None:
+    if not path.is_file():
+        add_result(results, f"{label}_exists", False, str(path))
+        return None
+    add_result(results, f"{label}_exists", True, str(path))
+    if yaml is None:
+        add_result(
+            results,
+            f"{label}_yaml_readable",
+            False,
+            "PyYAML missing; install scripts/requirements-v2.txt",
+        )
+        return None
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as error:
+        add_result(results, f"{label}_yaml_readable", False, str(error))
+        return None
+    is_mapping = isinstance(loaded, dict)
+    add_result(
+        results,
+        f"{label}_yaml_readable",
+        is_mapping,
+        "mapping" if is_mapping else f"expected mapping, got {type(loaded).__name__}",
+    )
+    return loaded if is_mapping else None
+
+
+def validate_schema_version(
+    document: Dict[str, Any] | None,
+    label: str,
+    results: List[Dict[str, str]],
+) -> None:
+    actual = document.get("schema_version") if document is not None else None
+    add_result(
+        results,
+        f"{label}_schema_version",
+        actual == "2.0",
+        f"expected=2.0 actual={actual!r}",
+    )
+
+
+def validate_source_register(
+    workspace: Path,
+    document: Dict[str, Any] | None,
+    evidence_ids: set[str],
+    proposal_path: Path,
+    results: List[Dict[str, str]],
+) -> None:
+    raw_sources = document.get("sources") if document is not None else None
+    sources_are_list = isinstance(raw_sources, list)
+    add_result(
+        results,
+        "source_register_sources",
+        sources_are_list,
+        f"count={len(raw_sources)}" if sources_are_list else "expected list",
+    )
+    sources = raw_sources if sources_are_list else []
+
+    source_ids: List[str] = []
+    malformed_entries: List[str] = []
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            malformed_entries.append(f"index={index}:{type(source).__name__}")
+            continue
+        source_id = source.get("id")
+        if isinstance(source_id, str):
+            source_ids.append(source_id)
+        else:
+            malformed_entries.append(f"index={index}:id={source_id!r}")
+
+    invalid_source_ids = sorted(
+        source_id
+        for source_id in source_ids
+        if re.fullmatch(r"S-\d{3,}", source_id) is None
+    )
+    duplicate_source_ids = sorted(
+        source_id for source_id in set(source_ids) if source_ids.count(source_id) > 1
+    )
+    add_result(
+        results,
+        "source_register_source_ids",
+        not malformed_entries
+        and not invalid_source_ids
+        and not duplicate_source_ids
+        and len(source_ids) == len(sources),
+        (
+            f"ids={source_ids} invalid={invalid_source_ids} "
+            f"duplicates={duplicate_source_ids} malformed={malformed_entries}"
+        ),
+    )
+    registered_source_ids = {
+        source_id
+        for source_id in source_ids
+        if re.fullmatch(r"S-\d{3,}", source_id) is not None
+    }
+
+    workspace_root = workspace.resolve()
+    invalid_local_paths: List[str] = []
+    invalid_urls: List[str] = []
+    invalid_supports: List[str] = []
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            continue
+        source_label = str(source.get("id") or f"index={index}")
+
+        if "local_path" in source:
+            local_path = source.get("local_path")
+            if not isinstance(local_path, str) or not local_path.strip():
+                invalid_local_paths.append(f"{source_label}:{local_path!r}")
+            else:
+                path_value = Path(local_path)
+                windows_absolute = bool(
+                    re.match(r"^(?:[A-Za-z]:[\\/]|\\\\)", local_path)
+                )
+                resolved_path = (workspace_root / path_value).resolve()
+                try:
+                    inside_workspace = resolved_path.is_relative_to(workspace_root)
+                except ValueError:
+                    inside_workspace = False
+                if (
+                    path_value.is_absolute()
+                    or windows_absolute
+                    or not inside_workspace
+                    or not resolved_path.is_file()
+                ):
+                    invalid_local_paths.append(
+                        f"{source_label}:{local_path} -> {resolved_path}"
+                    )
+
+        if "url" in source:
+            url = source.get("url")
+            parsed = urlparse(url) if isinstance(url, str) else None
+            if (
+                parsed is None
+                or parsed.scheme.lower() != "https"
+                or not parsed.netloc
+            ):
+                invalid_urls.append(f"{source_label}:{url!r}")
+
+        supports = source.get("supports", [])
+        if not isinstance(supports, list):
+            invalid_supports.append(f"{source_label}:expected list")
+            continue
+        for evidence_id in supports:
+            if (
+                not isinstance(evidence_id, str)
+                or re.fullmatch(r"E-\d{3,}", evidence_id) is None
+                or evidence_id not in evidence_ids
+            ):
+                invalid_supports.append(f"{source_label}:{evidence_id!r}")
+
+    add_result(
+        results,
+        "source_register_relative_paths",
+        not invalid_local_paths,
+        f"invalid={invalid_local_paths}",
+    )
+    add_result(
+        results,
+        "source_register_https_urls",
+        not invalid_urls,
+        f"invalid={invalid_urls}",
+    )
+    add_result(
+        results,
+        "source_register_supports_evidence",
+        not invalid_supports,
+        f"invalid={invalid_supports}",
+    )
+
+    proposal_source_ids: set[str] = set()
+    proposal_read_error = ""
+    if proposal_path.is_file():
+        try:
+            proposal_text = proposal_path.read_text(encoding="utf-8")
+            proposal_source_ids = set(re.findall(r"\bS-\d{3,}\b", proposal_text))
+        except (OSError, UnicodeError) as error:
+            proposal_read_error = str(error)
+    missing_source_ids = sorted(proposal_source_ids - registered_source_ids)
+    add_result(
+        results,
+        "proposal_source_references",
+        not proposal_read_error and not missing_source_ids,
+        (
+            f"referenced={sorted(proposal_source_ids)} "
+            f"missing={missing_source_ids} read_error={proposal_read_error!r}"
+        ),
+    )
+
+
+def validate_v2_workspace_metadata(
+    workspace: Path,
+    evidence_path: Path,
+    proposal_path: Path,
+    results: List[Dict[str, str]],
+) -> None:
+    manifest_path = workspace / "plan-manifest.yaml"
+    source_register_path = workspace / "source-register.yaml"
+    if not manifest_path.exists() and not source_register_path.exists():
+        return
+
+    manifest = read_yaml_mapping(manifest_path, "plan_manifest", results)
+    source_register = read_yaml_mapping(
+        source_register_path,
+        "source_register",
+        results,
+    )
+    validate_schema_version(manifest, "plan_manifest", results)
+    validate_schema_version(source_register, "source_register", results)
+    validate_source_register(
+        workspace,
+        source_register,
+        read_evidence_ids(evidence_path),
+        proposal_path,
+        results,
+    )
 
 
 def validate_decision_log(path: Path, results: List[Dict[str, str]]) -> str:
@@ -374,6 +612,13 @@ def main() -> int:
     proposal_text = ""
     evidence_ids: set[str] = set()
     page_count = 0
+
+    validate_v2_workspace_metadata(
+        workspace,
+        artifacts["evidence"],
+        artifacts["proposal"],
+        results,
+    )
 
     if args.mode == "discovery-only":
         validate_brief(artifacts["brief"], results)

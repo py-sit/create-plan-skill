@@ -13,6 +13,7 @@ from typing import Dict
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = SKILL_ROOT / "scripts" / "requirements.txt"
+V2_REQUIREMENTS = SKILL_ROOT / "scripts" / "requirements-v2.txt"
 
 FONT_CANDIDATES = [
     Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
@@ -35,9 +36,9 @@ def first_command(*names: str) -> str:
     return ""
 
 
-def expected_package_versions() -> Dict[str, str]:
+def expected_package_versions(path: Path = REQUIREMENTS) -> Dict[str, str]:
     result: Dict[str, str] = {}
-    for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "==" not in stripped:
             continue
@@ -46,9 +47,9 @@ def expected_package_versions() -> Dict[str, str]:
     return result
 
 
-def package_versions() -> Dict[str, Dict[str, object]]:
+def package_versions(path: Path = REQUIREMENTS) -> Dict[str, Dict[str, object]]:
     result: Dict[str, Dict[str, object]] = {}
-    for distribution, expected in expected_package_versions().items():
+    for distribution, expected in expected_package_versions(path).items():
         try:
             version = metadata.version(distribution)
             matches = version == expected
@@ -95,6 +96,8 @@ def collect_capabilities() -> Dict[str, object]:
     )
     pdftoppm = first_command("pdftoppm")
     font = find_font()
+    v2_packages = package_versions(V2_REQUIREMENTS)
+    browser = find_chrome()
     return {
         "python": {
             "status": "ready" if python_ready else "unsupported",
@@ -117,6 +120,55 @@ def collect_capabilities() -> Dict[str, object]:
         "font": {
             "status": "ready" if font else "missing",
             "path": font,
+        },
+        "v2_pdf": {
+            "status": (
+                "ready"
+                if browser
+                and all(
+                    details.get("status") == "ready"
+                    for details in v2_packages.values()
+                )
+                else "missing"
+            ),
+            "browser": {
+                "status": "ready" if browser else "missing",
+                "path": browser,
+            },
+            "playwright": {
+                **v2_packages.get(
+                    "playwright",
+                    {
+                        "status": "missing",
+                        "version": "",
+                        "expected": "",
+                        "matches_pin": False,
+                    },
+                )
+            },
+            "markdown": {
+                **v2_packages.get(
+                    "Markdown",
+                    {
+                        "status": "missing",
+                        "version": "",
+                        "expected": "",
+                        "matches_pin": False,
+                    },
+                )
+            },
+            "pyyaml": {
+                **v2_packages.get(
+                    "PyYAML",
+                    {
+                        "status": "missing",
+                        "version": "",
+                        "expected": "",
+                        "matches_pin": False,
+                    },
+                )
+            },
+            "strict_note": "V2 PDF capabilities do not change the V1.1 --strict contract.",
         },
     }
 

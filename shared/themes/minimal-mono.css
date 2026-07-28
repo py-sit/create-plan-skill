@@ -1,0 +1,24 @@
+:root {
+  --brand-color: #111827;
+  --accent-color: #374151;
+  --text-color: #111827;
+  --muted-color: #6b7280;
+  --line-color: #d1d5db;
+  --panel-color: #f3f4f6;
+  --table-header: #e5e7eb;
+  --table-alt: #f9fafb;
+  --page-background: #ffffff;
+  --font-stack: "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei",
+    "Arial Unicode MS", Arial, sans-serif;
+}
+
+@page {
+  size: A4;
+  margin: 17mm 18mm 18mm;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
