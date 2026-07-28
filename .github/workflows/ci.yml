@@ -67,3 +67,9 @@ jobs:
 
       - name: Scan release runtime for sensitive content
         run: python scripts/scan_sensitive_content.py . --profile release
+
+      - name: Build and validate plugin package
+        run: |
+          python scripts/package_plugin.py --output-dir dist
+          python scripts/validate_release_package.py \
+            dist/create-plan-skill-2.0.0.zip
