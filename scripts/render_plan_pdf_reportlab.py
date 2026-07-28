@@ -121,13 +121,15 @@ def find_font(explicit: Path | None) -> Path:
     candidates.extend(
         [
             Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+            Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
             Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttf"),
             Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
             Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"),
         ]
     )
     for candidate in candidates:
-        if candidate.is_file() and candidate.suffix.lower() == ".ttf":
+        if candidate.is_file() and candidate.suffix.lower() in {".ttf", ".ttc"}:
             return candidate.resolve()
     raise FileNotFoundError(
         "No compatible Unicode TTF font found. Pass --font /absolute/path/font.ttf"
