@@ -1,6 +1,11 @@
 ---
 name: create-plan-skill
-description: Turn incomplete, ambiguous, or complex requirements into an evidence-based formal solution proposal and verified PDF deliverable. Use when Codex must understand a user's real goal through focused Q&A, inspect an existing project or source material, research current official documentation and GitHub projects, compare alternatives, design architecture and workflows, record assumptions and decisions, create Mermaid diagrams, produce a professional Chinese or English proposal PDF, and visually validate every page before delivery. Also use for product proposals, technical designs, implementation roadmaps, AI/RAG plans, deployment plans, security plans, and customer-facing solution documents.
+description: Use when a user explicitly needs a formal, evidence-based solution proposal or proposal PDF from incomplete or complex requirements, including architecture, AI/RAG, deployment, security, roadmap, customer-review, or proposal-validation work.
+license: MIT
+metadata:
+  version: "1.1.0"
+  author: "py-sit"
+  compatibility: "Python 3.9+; scripts/requirements.txt; Mermaid CLI or authorized Kroki; Unicode font; pdftoppm"
 ---
 
 # Create Plan Skill
@@ -38,6 +43,19 @@ Do not expose private chain-of-thought. Record only concise, useful reasoning ar
 11. In full-proposal mode, do not declare completion until the PDF has been
     rendered and every page has been visually inspected.
 
+## When Not to Use
+
+Do not use this skill for:
+
+- code implementation, debugging, or ordinary feature development;
+- implementation plans written from an already approved specification;
+- PDF resizing, conversion, merging, extraction, or other direct file editing;
+- generic GitHub repository search or license comparison that is not supporting
+  a formal solution decision or proposal.
+
+Route those tasks to the relevant implementation, planning, PDF, or GitHub
+research skill instead.
+
 ## Workflow
 
 ### 1. Select the operating mode
@@ -46,8 +64,9 @@ Infer the narrowest mode that satisfies the user:
 
 - **discovery-only**: reconstruct the goal, list material gaps, and ask one
   decision-driving question per turn;
-- **research-and-options**: produce a confirmed brief, evidence register, source
-  review, alternatives, and recommendation without requiring a formal PDF;
+- **research-and-options**: in a formal solution-decision context, produce a
+  confirmed brief, evidence register, source review, alternatives, and
+  recommendation without requiring a formal PDF;
 - **full-proposal**: run the complete workflow and deliver editable source,
   Mermaid source and renders, and a visually verified PDF;
 - **validation-only**: inspect an existing proposal package and report defects
@@ -196,8 +215,11 @@ Initialize a reusable workspace when helpful:
 ```bash
 python3 scripts/init_plan_workspace.py \
   --output-dir /absolute/path/to/plan-workspace \
-  --title "方案名称"
+  --title "方案名称" \
+  --language zh-CN
 ```
+
+Use `--language en-US` for a fully English template and PDF chrome.
 
 The proposal must make these boundaries explicit:
 
@@ -259,13 +281,18 @@ Read `references/pdf-production.md` before final rendering.
 
 ### 11. Validate
 
+Run the environment preflight before the first full render on a machine:
+
+```bash
+python3 scripts/check_environment.py
+```
+
 Run:
 
 ```bash
 python3 scripts/validate_plan_package.py \
-  --proposal proposal.md \
-  --pdf output/pdf/formal-plan.pdf \
-  --diagrams-dir diagrams
+  --mode full-proposal \
+  --workspace /absolute/path/to/plan-workspace
 ```
 
 Also:
@@ -276,6 +303,15 @@ Also:
 - render all PDF pages to images;
 - inspect every page for clipping, overlap, missing Chinese glyphs, blank regions, unreadable diagrams, broken tables, inconsistent numbering, and poor page breaks;
 - verify the delivered copy matches the reviewed file by SHA256.
+
+Use the bundled helpers:
+
+```bash
+python3 scripts/render_pdf_pages.py output/pdf/formal-plan.pdf \
+  --output-dir tmp/rendered-pages
+python3 scripts/create_pdf_contact_sheet.py tmp/rendered-pages \
+  --output tmp/contact-sheet.png
+```
 
 Do not rely only on text extraction or a successful PDF build.
 
@@ -304,10 +340,16 @@ Do not push, merge, publish, deploy, or modify production systems unless the use
   agent, multimodal, edge, and automated-report proposals.
 - `references/pdf-production.md`: PDF generation and visual acceptance requirements.
 - `assets/formal-plan-template.md`: copyable proposal source template.
+- `assets/formal-plan-template.zh-CN.md`: Chinese proposal template.
+- `assets/formal-plan-template.en-US.md`: English proposal template.
 - `scripts/init_plan_workspace.py`: scaffold a clean proposal workspace.
+- `scripts/check_environment.py`: report Python, package, renderer, font, and PDF QA capabilities.
 - `scripts/render_mermaid.py`: render Mermaid to SVG, PNG, and PDF.
 - `scripts/render_plan_pdf.py`: create a styled PDF from the proposal Markdown.
+- `scripts/render_pdf_pages.py`: render every PDF page to PNG.
+- `scripts/create_pdf_contact_sheet.py`: create a visual QA contact sheet.
 - `scripts/validate_plan_package.py`: validate proposal source, diagrams, and PDF.
+- `scripts/validate_evals.py`: validate the versioned trigger and workflow eval suite.
 
 ## Trigger Examples
 

@@ -4,6 +4,18 @@ Read this reference only when the proposal includes AI-generated analysis,
 retrieval-augmented generation (RAG), agents, multimodal evidence, edge
 inference, or automatically generated formal reports.
 
+## Contents
+
+- Authority and user workflow
+- Inputs and provenance
+- Retrieval quality
+- Model and failure boundary
+- Privacy and external search
+- Security and audit
+- Edge and deployment
+- Formal report integrity
+- Evaluation and acceptance
+
 ## Authority and user workflow
 
 - Who owns the final conclusion: model, engineer, reviewer, or approver?

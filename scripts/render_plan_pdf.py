@@ -52,6 +52,48 @@ LINE = colors.HexColor("#C9D8EA")
 TABLE_HEADER = colors.HexColor("#DCE9F8")
 TABLE_ALT = colors.HexColor("#F7FAFE")
 
+LABELS: Dict[str, Dict[str, str]] = {
+    "zh-CN": {
+        "default_title": "正式方案",
+        "recommendation": "推荐方案",
+        "status": "文档状态",
+        "default_status": "方案评审稿",
+        "version": "版本",
+        "date": "日期",
+        "scope": "方案边界",
+        "default_scope": "本轮只输出设计",
+        "review_gate": "评审确认后，再进入实施计划或 PoC 阶段",
+        "contents": "目录",
+        "page": "第 {page} 页",
+    },
+    "en-US": {
+        "default_title": "Formal Proposal",
+        "recommendation": "Recommended approach",
+        "status": "Document status",
+        "default_status": "Draft for Review",
+        "version": "Version",
+        "date": "Date",
+        "scope": "Scope boundary",
+        "default_scope": "This phase delivers design only",
+        "review_gate": "Proceed to implementation planning or PoC only after review approval",
+        "contents": "Contents",
+        "page": "Page {page}",
+    },
+}
+
+
+def normalize_language(value: str) -> str:
+    normalized = value.strip().replace("_", "-")
+    if normalized.lower() in {"zh", "zh-cn"}:
+        return "zh-CN"
+    if normalized.lower() in {"en", "en-us"}:
+        return "en-US"
+    if normalized in LABELS:
+        return normalized
+    raise ValueError(
+        f"Unsupported PDF language: {value}. Choose one of: {', '.join(LABELS)}"
+    )
+
 
 def parse_frontmatter(text: str) -> Tuple[Dict[str, str], str]:
     lines = text.splitlines()
@@ -79,28 +121,66 @@ def find_font(explicit: Path | None) -> Path:
     candidates.extend(
         [
             Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
-            Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
-            Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
-            Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
+            Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"),
         ]
     )
     for candidate in candidates:
         if candidate.is_file() and candidate.suffix.lower() == ".ttf":
             return candidate.resolve()
     raise FileNotFoundError(
-        "No compatible Chinese TTF font found. Pass --font /absolute/path/font.ttf"
+        "No compatible Unicode TTF font found. Pass --font /absolute/path/font.ttf"
     )
 
 
-def inline_markup(value: str, font_name: str) -> str:
-    escaped = escape(value.strip())
+def inline_markup(
+    value: str,
+    font_name: str,
+    base_path: Path | None = None,
+) -> str:
+    link_markup: list[tuple[str, str]] = []
+
+    def capture_link(match: re.Match[str]) -> str:
+        token = f"PLANLINKTOKEN{len(link_markup)}"
+        label = escape(match.group(1))
+        target = resolve_link_target(match.group(2), base_path)
+        if target:
+            markup = (
+                f'<link href="{escape(target, quote=True)}" color="#174474">'
+                f"<u>{label}</u></link>"
+            )
+        else:
+            markup = f'<font color="#174474"><u>{label}</u></font>'
+        link_markup.append(
+            (
+                token,
+                markup,
+            )
+        )
+        return token
+
+    tokenized = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", capture_link, value.strip())
+    escaped = escape(tokenized)
     escaped = re.sub(
         r"`([^`]+)`",
         rf'<font name="{font_name}" color="#9A3412">\1</font>',
         escaped,
     )
     escaped = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", escaped)
+    for token, markup in link_markup:
+        escaped = escaped.replace(token, markup)
     return escaped
+
+
+def resolve_link_target(target: str, base_path: Path | None) -> str:
+    target = target.strip()
+    if target.lower().startswith(("http://", "https://", "mailto:", "tel:")):
+        return target
+    # Local Markdown links remain visible in the PDF but are deliberately not
+    # converted to absolute file:// URIs. The source Markdown keeps the real
+    # relative target, while the validator confirms that it exists.
+    return ""
 
 
 def load_styles(font_name: str) -> Dict[str, ParagraphStyle]:
@@ -274,6 +354,7 @@ def paragraph_from_buffer(
     buffer: List[str],
     styles: Dict[str, ParagraphStyle],
     font_name: str,
+    base_path: Path,
 ) -> List[object]:
     if not buffer:
         return []
@@ -281,7 +362,7 @@ def paragraph_from_buffer(
     buffer.clear()
     if not text:
         return []
-    return [Paragraph(inline_markup(text, font_name), styles["body"])]
+    return [Paragraph(inline_markup(text, font_name, base_path), styles["body"])]
 
 
 def parse_markdown(
@@ -300,12 +381,26 @@ def parse_markdown(
         raw = lines[index]
         stripped = raw.strip()
         if not stripped:
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             index += 1
             continue
 
         if stripped.startswith("```"):
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             code_lines: List[str] = []
             index += 1
             while index < len(lines) and not lines[index].strip().startswith("```"):
@@ -317,7 +412,14 @@ def parse_markdown(
 
         image_match = re.fullmatch(r"!\[([^\]]*)\]\(([^)]+)\)", stripped)
         if image_match:
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             story.extend(
                 image_flowables(
                     markdown_path,
@@ -330,14 +432,28 @@ def parse_markdown(
             continue
 
         if stripped.startswith("|"):
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             table, index = parse_table(lines, index, styles, font_name)
             story.extend([Spacer(1, 4), table, Spacer(1, 8)])
             continue
 
         heading_match = re.match(r"^(#{1,4})\s+(.+)$", stripped)
         if heading_match:
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             level = len(heading_match.group(1))
             title = heading_match.group(2).strip()
             if level == 1:
@@ -355,13 +471,27 @@ def parse_markdown(
             continue
 
         if stripped == "---":
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             story.append(Spacer(1, 4))
             index += 1
             continue
 
         if re.match(r"^[-*]\s+", stripped) or re.match(r"^\d+\.\s+", stripped):
-            story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+            story.extend(
+                paragraph_from_buffer(
+                    paragraph_buffer,
+                    styles,
+                    font_name,
+                    markdown_path.parent,
+                )
+            )
             ordered = bool(re.match(r"^\d+\.\s+", stripped))
             items: List[ListItem] = []
             while index < len(lines):
@@ -372,7 +502,14 @@ def parse_markdown(
                     break
                 items.append(
                     ListItem(
-                        Paragraph(inline_markup(match.group(1), font_name), styles["body"]),
+                        Paragraph(
+                            inline_markup(
+                                match.group(1),
+                                font_name,
+                                markdown_path.parent,
+                            ),
+                            styles["body"],
+                        ),
                         leftIndent=12,
                     )
                 )
@@ -407,13 +544,25 @@ def parse_markdown(
         paragraph_buffer.append(stripped)
         index += 1
 
-    story.extend(paragraph_from_buffer(paragraph_buffer, styles, font_name))
+    story.extend(
+        paragraph_from_buffer(
+            paragraph_buffer,
+            styles,
+            font_name,
+            markdown_path.parent,
+        )
+    )
     return story, headings
 
 
-def make_cover(path: Path, metadata: Dict[str, str], font_name: str) -> None:
+def make_cover(
+    path: Path,
+    metadata: Dict[str, str],
+    font_name: str,
+    labels: Dict[str, str],
+) -> None:
     pdf = canvas.Canvas(str(path), pagesize=A4)
-    title = metadata.get("title", "正式方案")
+    title = metadata.get("title", labels["default_title"])
     subtitle = metadata.get("subtitle", "")
     recommendation = metadata.get("recommendation", "")
     pdf.setTitle(title)
@@ -440,17 +589,17 @@ def make_cover(path: Path, metadata: Dict[str, str], font_name: str) -> None:
         pdf.roundRect(78, PAGE_HEIGHT - 382, PAGE_WIDTH - 156, 58, 4, fill=1, stroke=1)
         pdf.setFillColor(BLUE)
         pdf.setFont(font_name, 10.5)
-        pdf.drawString(100, PAGE_HEIGHT - 349, "推荐方案")
+        pdf.drawString(100, PAGE_HEIGHT - 349, labels["recommendation"])
         pdf.setFont(font_name, 10.5)
         text = recommendation[:54] + ("…" if len(recommendation) > 54 else "")
         pdf.drawString(100, PAGE_HEIGHT - 370, text)
     pdf.setFillColor(TEXT)
     pdf.setFont(font_name, 10)
     meta_lines = [
-        f"文档状态：{metadata.get('status', '方案评审稿')}",
-        f"版本：{metadata.get('version', 'V1.0')}",
-        f"日期：{metadata.get('date', date.today().isoformat())}",
-        f"方案边界：{metadata.get('scope', '本轮只输出设计')}",
+        f"{labels['status']}: {metadata.get('status', labels['default_status'])}",
+        f"{labels['version']}: {metadata.get('version', 'V1.0')}",
+        f"{labels['date']}: {metadata.get('date', date.today().isoformat())}",
+        f"{labels['scope']}: {metadata.get('scope', labels['default_scope'])}",
     ]
     y = PAGE_HEIGHT - 455
     for line in meta_lines:
@@ -460,7 +609,7 @@ def make_cover(path: Path, metadata: Dict[str, str], font_name: str) -> None:
     pdf.line(122, 132, PAGE_WIDTH - 122, 132)
     pdf.setFillColor(BLUE)
     pdf.setFont(font_name, 9)
-    pdf.drawCentredString(PAGE_WIDTH / 2, 112, "评审确认后，再进入实施计划或 PoC 阶段")
+    pdf.drawCentredString(PAGE_WIDTH / 2, 112, labels["review_gate"])
     pdf.showPage()
     pdf.save()
 
@@ -472,8 +621,9 @@ def make_body(
     headings: List[str],
     styles: Dict[str, ParagraphStyle],
     font_name: str,
+    labels: Dict[str, str],
 ) -> None:
-    title = metadata.get("title", "正式方案")
+    title = metadata.get("title", labels["default_title"])
     doc = SimpleDocTemplate(
         str(path),
         pagesize=A4,
@@ -494,11 +644,15 @@ def make_body(
         pdf.setFont(font_name, 7)
         pdf.drawString(18 * mm, PAGE_HEIGHT - 9 * mm, f"{title} {metadata.get('version', '')}".strip())
         pdf.line(18 * mm, 12 * mm, PAGE_WIDTH - 18 * mm, 12 * mm)
-        pdf.drawRightString(PAGE_WIDTH - 18 * mm, 7 * mm, f"第 {document.page + 1} 页")
+        pdf.drawRightString(
+            PAGE_WIDTH - 18 * mm,
+            7 * mm,
+            labels["page"].format(page=document.page + 1),
+        )
         pdf.restoreState()
 
     toc: List[object] = [
-        Paragraph("目录", styles["toc_title"]),
+        Paragraph(labels["contents"], styles["toc_title"]),
         Table(
             [[Paragraph(escape(item), styles["toc_item"])] for item in headings],
             colWidths=[170 * mm],
@@ -516,7 +670,13 @@ def make_body(
     doc.build(toc + content, onFirstPage=header_footer, onLaterPages=header_footer)
 
 
-def combine(cover: Path, body: Path, output: Path, metadata: Dict[str, str]) -> None:
+def combine(
+    cover: Path,
+    body: Path,
+    output: Path,
+    metadata: Dict[str, str],
+    labels: Dict[str, str],
+) -> None:
     writer = PdfWriter()
     for source in [cover, body]:
         reader = PdfReader(str(source))
@@ -524,7 +684,7 @@ def combine(cover: Path, body: Path, output: Path, metadata: Dict[str, str]) -> 
             writer.add_page(page)
     writer.add_metadata(
         {
-            "/Title": metadata.get("title", "正式方案"),
+            "/Title": metadata.get("title", labels["default_title"]),
             "/Author": "Created with create-plan-skill",
             "/Subject": metadata.get("subtitle", ""),
         }
@@ -553,6 +713,8 @@ def main() -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
         metadata, body = parse_frontmatter(proposal.read_text(encoding="utf-8"))
+        language = normalize_language(metadata.get("language", "zh-CN"))
+        labels = LABELS[language]
         font_path = find_font(args.font)
         pdfmetrics.registerFont(TTFont("PlanUnicode", str(font_path)))
         styles = load_styles("PlanUnicode")
@@ -564,9 +726,17 @@ def main() -> int:
         )
         cover = output.with_name(f".{output.stem}-cover.pdf")
         body_pdf = output.with_name(f".{output.stem}-body.pdf")
-        make_cover(cover, metadata, "PlanUnicode")
-        make_body(body_pdf, metadata, content, headings, styles, "PlanUnicode")
-        combine(cover, body_pdf, output, metadata)
+        make_cover(cover, metadata, "PlanUnicode", labels)
+        make_body(
+            body_pdf,
+            metadata,
+            content,
+            headings,
+            styles,
+            "PlanUnicode",
+            labels,
+        )
+        combine(cover, body_pdf, output, metadata, labels)
         cover.unlink(missing_ok=True)
         body_pdf.unlink(missing_ok=True)
         reader = PdfReader(str(output))
