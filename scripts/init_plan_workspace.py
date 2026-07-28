@@ -8,8 +8,18 @@ import re
 import shutil
 import sys
 
+try:
+    import yaml
+except ImportError as error:
+    print(
+        "ERROR: Missing PyYAML. Install scripts/requirements.txt.",
+        file=sys.stderr,
+    )
+    raise SystemExit(2) from error
+
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
+SKILL_VERSION = "2.0.0"
 TEMPLATES = {
     "zh-CN": SKILL_ROOT / "assets" / "formal-plan-template.zh-CN.md",
     "en-US": SKILL_ROOT / "assets" / "formal-plan-template.en-US.md",
@@ -188,6 +198,8 @@ def build_workspace(
     title: str,
     force: bool,
     language: str = "zh-CN",
+    mode: str = "full-proposal",
+    theme: str = "corporate-blue",
 ) -> None:
     language = normalize_language(language)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -196,6 +208,7 @@ def build_workspace(
         output_dir / "diagrams",
         output_dir / "diagrams" / "rendered",
         output_dir / "output" / "pdf",
+        output_dir / "references",
         output_dir / "tmp" / "rendered-pages",
     ]:
         directory.mkdir(parents=True, exist_ok=True)
@@ -237,6 +250,52 @@ def build_workspace(
         scaffolds["user_flow"],
         force,
     )
+    manifest = {
+        "schema_version": "2.0",
+        "skill_version": SKILL_VERSION,
+        "title": title,
+        "language": language,
+        "mode": mode,
+        "stage": "discovery",
+        "theme": theme,
+        "render": {
+            "engine": "playwright",
+            "fallback": "reportlab",
+            "visual_review": "pending",
+        },
+        "artifacts": {
+            "brief": "brief.md",
+            "questions": "questions.md",
+            "evidence_register": "evidence-register.md",
+            "source_register": "source-register.yaml",
+            "decision_log": "decision-log.md",
+            "proposal": "proposal.md",
+            "diagrams": "diagrams",
+            "pdf": "output/pdf/formal-plan.pdf",
+            "rendered_pages": "tmp/rendered-pages",
+        },
+    }
+    write_text(
+        output_dir / "plan-manifest.yaml",
+        yaml.safe_dump(
+            manifest,
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        force,
+    )
+    write_text(
+        output_dir / "source-register.yaml",
+        yaml.safe_dump(
+            {
+                "schema_version": "2.0",
+                "sources": [],
+            },
+            allow_unicode=True,
+            sort_keys=False,
+        ),
+        force,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -250,6 +309,22 @@ def parse_args() -> argparse.Namespace:
         default="zh-CN",
         choices=sorted(TEMPLATES),
         help="Proposal language and PDF chrome.",
+    )
+    parser.add_argument(
+        "--mode",
+        default="full-proposal",
+        choices=[
+            "discovery-only",
+            "research-and-options",
+            "full-proposal",
+            "validation-only",
+        ],
+        help="Operating mode recorded in plan-manifest.yaml.",
+    )
+    parser.add_argument(
+        "--theme",
+        default="corporate-blue",
+        help="Theme identifier recorded in plan-manifest.yaml.",
     )
     parser.add_argument(
         "--force",
@@ -267,6 +342,8 @@ def main() -> int:
             args.title,
             args.force,
             args.language,
+            args.mode,
+            args.theme,
         )
     except (FileExistsError, OSError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
@@ -276,6 +353,8 @@ def main() -> int:
     print(f"workspace={output_dir}")
     print(f"proposal={output_dir / 'proposal.md'}")
     print(f"language={args.language}")
+    print(f"mode={args.mode}")
+    print(f"theme={args.theme}")
     print(f"slug={slugify(args.title)}")
     return 0
 

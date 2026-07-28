@@ -1,0 +1,38 @@
+{
+  "name": "create-plan-skill",
+  "version": "2.0.0",
+  "description": "A Codex plugin for turning incomplete requirements into evidence-based formal plans and verified PDF packages.",
+  "author": {
+    "name": "py-sit",
+    "url": "https://github.com/py-sit"
+  },
+  "homepage": "https://github.com/py-sit/create-plan-skill",
+  "repository": "https://github.com/py-sit/create-plan-skill",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "proposal",
+    "planning",
+    "pdf",
+    "evidence"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Create Plan PDF",
+    "shortDescription": "澄清需求、研究方案并交付可验收的正式 PDF",
+    "longDescription": "将不完整或复杂需求拆分为需求澄清、资料研究、正式方案编写和交付验收四个独立阶段，并保留来源、决策、风险和 PDF 验证证据。",
+    "developerName": "py-sit",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/py-sit/create-plan-skill",
+    "defaultPrompt": [
+      "澄清我的方案需求，每次只问一个关键问题。",
+      "研究可行方案并比较证据、风险与取舍。",
+      "生成正式方案、流程图和经过验证的 PDF。"
+    ],
+    "brandColor": "#174474"
+  }
+}

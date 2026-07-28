@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/py-sit/create-plan-skill/schemas/plan-manifest.schema.json",
+  "title": "Create Plan Workspace Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "skill_version",
+    "title",
+    "language",
+    "mode",
+    "stage",
+    "theme",
+    "render",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "skill_version": {
+      "type": "string",
+      "pattern": "^2\\.0\\.[0-9]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "enum": [
+        "zh-CN",
+        "en-US"
+      ]
+    },
+    "mode": {
+      "enum": [
+        "discovery-only",
+        "research-and-options",
+        "full-proposal",
+        "validation-only"
+      ]
+    },
+    "stage": {
+      "enum": [
+        "discovery",
+        "research",
+        "authoring",
+        "validation",
+        "complete"
+      ]
+    },
+    "theme": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "render": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "fallback",
+        "visual_review"
+      ],
+      "properties": {
+        "engine": {
+          "enum": [
+            "playwright",
+            "reportlab"
+          ]
+        },
+        "fallback": {
+          "enum": [
+            "reportlab",
+            "none"
+          ]
+        },
+        "visual_review": {
+          "enum": [
+            "pending",
+            "passed",
+            "failed"
+          ]
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}

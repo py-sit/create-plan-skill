@@ -1,0 +1,6 @@
+interface:
+  display_name: "Author Formal Plan"
+  short_description: "编写正式方案、Mermaid 图和可审阅 PDF"
+  default_prompt: "使用 $author-formal-plan 根据已确认需求和证据生成正式方案与 PDF。"
+policy:
+  allow_implicit_invocation: false

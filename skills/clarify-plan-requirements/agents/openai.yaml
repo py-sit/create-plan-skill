@@ -1,0 +1,6 @@
+interface:
+  display_name: "Clarify Plan Requirements"
+  short_description: "澄清正式方案所需的目标、范围、责任和验收边界"
+  default_prompt: "使用 $clarify-plan-requirements 先还原目标和缺口，每次只问一个关键问题。"
+policy:
+  allow_implicit_invocation: false

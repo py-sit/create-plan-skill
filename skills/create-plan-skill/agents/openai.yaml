@@ -1,0 +1,6 @@
+interface:
+  display_name: "Create Plan Router"
+  short_description: "把正式方案任务路由到需求、研究、编写或验收阶段"
+  default_prompt: "使用 $create-plan-skill 判断当前所处阶段，并调用最合适的专项方案 skill。"
+policy:
+  allow_implicit_invocation: true

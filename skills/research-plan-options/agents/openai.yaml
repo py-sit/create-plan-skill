@@ -1,0 +1,6 @@
+interface:
+  display_name: "Research Plan Options"
+  short_description: "查证正式方案所需资料并比较可行架构"
+  default_prompt: "使用 $research-plan-options 查当前官方资料和原始仓库，登记来源并给出方案比较。"
+policy:
+  allow_implicit_invocation: false

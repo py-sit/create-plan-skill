@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/py-sit/create-plan-skill/schemas/source-register.schema.json",
+  "title": "Create Plan Source Register",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sources"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "accessed",
+          "supports"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^S-[0-9]{3,}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "enum": [
+              "official-doc",
+              "repository",
+              "release",
+              "paper",
+              "dataset",
+              "runtime",
+              "project-file",
+              "user-provided",
+              "other"
+            ]
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "local_path": {
+            "type": "string",
+            "not": {
+              "pattern": "^(?:/|[A-Za-z]:[\\\\/])"
+            }
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "accessed": {
+            "type": "string",
+            "format": "date"
+          },
+          "version": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "supports": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^E-[0-9]{3,}$"
+            },
+            "uniqueItems": true
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "url"
+            ]
+          },
+          {
+            "required": [
+              "local_path"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
