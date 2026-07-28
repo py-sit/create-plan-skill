@@ -19,6 +19,7 @@ try:
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.pdfgen import canvas
     from reportlab.platypus import (
@@ -139,6 +140,18 @@ def find_font(explicit: Path | None) -> Path:
     raise FileNotFoundError(
         "No compatible Unicode TTF font found. Pass --font /absolute/path/font.ttf"
     )
+
+
+def register_reportlab_font(language: str, explicit_font: Path | None) -> str:
+    if language == "zh-CN" and explicit_font is None:
+        # ReportLab's built-in Chinese CID font keeps an extractable ToUnicode
+        # map on Linux. Several distro TTF/TTC CJK fonts render visually but are
+        # extracted by pypdf as null-padded text, breaking PDF verification.
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        return "STSong-Light"
+    font_path = find_font(explicit_font)
+    pdfmetrics.registerFont(TTFont("PlanUnicode", str(font_path)))
+    return "PlanUnicode"
 
 
 def inline_markup(
@@ -722,25 +735,24 @@ def main() -> int:
         metadata, body = parse_frontmatter(proposal.read_text(encoding="utf-8"))
         language = normalize_language(metadata.get("language", "zh-CN"))
         labels = LABELS[language]
-        font_path = find_font(args.font)
-        pdfmetrics.registerFont(TTFont("PlanUnicode", str(font_path)))
-        styles = load_styles("PlanUnicode")
+        font_name = register_reportlab_font(language, args.font)
+        styles = load_styles(font_name)
         content, headings = parse_markdown(
             proposal,
             body,
             styles,
-            "PlanUnicode",
+            font_name,
         )
         cover = output.with_name(f".{output.stem}-cover.pdf")
         body_pdf = output.with_name(f".{output.stem}-body.pdf")
-        make_cover(cover, metadata, "PlanUnicode", labels)
+        make_cover(cover, metadata, font_name, labels)
         make_body(
             body_pdf,
             metadata,
             content,
             headings,
             styles,
-            "PlanUnicode",
+            font_name,
             labels,
         )
         combine(cover, body_pdf, output, metadata, labels)
