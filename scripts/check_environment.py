@@ -17,11 +17,12 @@ V2_REQUIREMENTS = SKILL_ROOT / "scripts" / "requirements-v2.txt"
 
 FONT_CANDIDATES = [
     Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+    Path("/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf"),
+    Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"),
     Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
     Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttf"),
     Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttf"),
     Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
-    Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttf"),
 ]
 
 CHROME_CANDIDATES = [
