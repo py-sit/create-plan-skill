@@ -1,0 +1,6 @@
+interface:
+  display_name: "Create Plan PDF"
+  short_description: "从需求澄清、方案研究到正式PDF交付的完整Codex工作流"
+  default_prompt: "Use $create-plan-skill to clarify this requirement, research viable approaches, and deliver a verified formal PDF proposal."
+policy:
+  allow_implicit_invocation: true
